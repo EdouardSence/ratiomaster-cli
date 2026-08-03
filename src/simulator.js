@@ -1,0 +1,242 @@
+import EventEmitter from 'events';
+import { sendAnnounce } from './announce.js';
+
+export class SimulationEngine extends EventEmitter {
+  constructor(torrentMeta, client, options = {}) {
+    super();
+    this.torrentMeta = torrentMeta;
+    this.client = client;
+
+    // Speeds in Bytes per second
+    this.minUploadSpeed = (options.minUploadRate || 500) * 1024;
+    this.maxUploadSpeed = (options.maxUploadRate || 1500) * 1024;
+    this.minDownloadSpeed = (options.minDownloadRate || 0) * 1024;
+    this.maxDownloadSpeed = (options.maxDownloadRate || 0) * 1024;
+
+    // Custom or initial values
+    this.uploaded = BigInt(options.initialUploaded || 0);
+    this.initialDownloaded = BigInt(options.initialDownloaded || 0);
+    
+    // Mode: 'seeding' (left = 0) vs 'leeching'
+    this.mode = options.mode || 'seeding';
+    if (this.mode === 'seeding') {
+      this.downloaded = BigInt(torrentMeta.totalSize);
+      this.left = 0n;
+    } else {
+      this.downloaded = this.initialDownloaded;
+      this.left = BigInt(Math.max(0, torrentMeta.totalSize - Number(this.downloaded)));
+    }
+
+    // Stop conditions
+    this.stopRatio = options.stopRatio || null;
+    this.stopUploadedBytes = options.stopUploaded ? BigInt(options.stopUploaded) : null;
+    this.stopTimeSeconds = options.stopTime || null;
+
+    // Custom interval override
+    this.customInterval = options.customInterval || null;
+
+    // Internal State
+    this.isRunning = false;
+    this.isStopping = false;
+    this.currentUploadSpeed = 0; // B/s
+    this.currentDownloadSpeed = 0; // B/s
+    this.elapsedSeconds = 0;
+    this.nextAnnounceCountdown = 0;
+    this.trackerInterval = 1800; // default 30 min
+    this.activeAnnounceUrl = options.announceUrl || torrentMeta.announce;
+
+    this.stats = {
+      seeders: 0,
+      leechers: 0,
+      lastResponseStatus: 'Pending initial announce...',
+      lastAnnounceTime: null,
+      announceCount: 0
+    };
+
+    this.tickTimer = null;
+  }
+
+  async start() {
+    if (this.isRunning) return;
+    this.isRunning = true;
+    this.emit('log', { level: 'info', message: `Starting simulation for "${this.torrentMeta.name}"` });
+    this.emit('log', { level: 'info', message: `Emulating client: ${this.client.name} (PeerID: ${this.client.peerId})` });
+
+    // Initial announce with event=started
+    const success = await this.performAnnounce('started');
+    if (!success && !this.isRunning) {
+      return;
+    }
+
+    // Start 1-second tick loop for speed calculations, stop condition checks, and countdown
+    this.tickTimer = setInterval(() => this.onTick(), 1000);
+  }
+
+  onTick() {
+    if (!this.isRunning || this.isStopping) return;
+
+    this.elapsedSeconds++;
+
+    // Calculate current random speed (with subtle variation tick-to-tick)
+    this.currentUploadSpeed = this.getRandomSpeed(this.minUploadSpeed, this.maxUploadSpeed);
+    this.currentDownloadSpeed = this.getRandomSpeed(this.minDownloadSpeed, this.maxDownloadSpeed);
+
+    // Add transfer bytes for this second
+    this.uploaded += BigInt(Math.round(this.currentUploadSpeed));
+
+    if (this.mode === 'leeching' && this.left > 0n) {
+      const downloadedThisTick = BigInt(Math.round(this.currentDownloadSpeed));
+      this.downloaded += downloadedThisTick;
+      if (this.downloaded >= BigInt(this.torrentMeta.totalSize)) {
+        this.downloaded = BigInt(this.torrentMeta.totalSize);
+        this.left = 0n;
+        this.mode = 'seeding';
+        this.emit('log', { level: 'success', message: 'Download 100% completed! Switching to seeding mode.' });
+        // Send completed event to tracker
+        this.performAnnounce('completed');
+      } else {
+        this.left = BigInt(this.torrentMeta.totalSize) - this.downloaded;
+      }
+    }
+
+    // Check stop conditions
+    if (this.checkStopConditions()) {
+      return;
+    }
+
+    // Countdown next announce
+    this.nextAnnounceCountdown--;
+    if (this.nextAnnounceCountdown <= 0) {
+      this.performAnnounce(null);
+    }
+
+    this.emit('tick', this.getSnapshot());
+  }
+
+  getRandomSpeed(min, max) {
+    if (min >= max) return min;
+    return min + Math.random() * (max - min);
+  }
+
+  checkStopConditions() {
+    const currentRatio = this.downloaded > 0n ? Number(this.uploaded) / Number(this.downloaded) : Number(this.uploaded) > 0 ? 999.99 : 0;
+
+    if (this.stopRatio && currentRatio >= this.stopRatio) {
+      this.emit('log', { level: 'success', message: `Target ratio of ${this.stopRatio} reached! (Current: ${currentRatio.toFixed(2)})` });
+      this.stop();
+      return true;
+    }
+
+    if (this.stopUploadedBytes && this.uploaded >= this.stopUploadedBytes) {
+      this.emit('log', { level: 'success', message: 'Target upload byte count reached!' });
+      this.stop();
+      return true;
+    }
+
+    if (this.stopTimeSeconds && this.elapsedSeconds >= this.stopTimeSeconds) {
+      this.emit('log', { level: 'success', message: `Target simulation runtime of ${this.stopTimeSeconds}s reached!` });
+      this.stop();
+      return true;
+    }
+
+    return false;
+  }
+
+  async performAnnounce(event = null) {
+    this.emit('log', { level: 'info', message: `Sending tracker announce (event: ${event || 'periodic'})...` });
+    try {
+      const res = await sendAnnounce({
+        announceUrl: this.activeAnnounceUrl,
+        torrentMeta: this.torrentMeta,
+        client: this.client,
+        uploaded: this.uploaded,
+        downloaded: this.downloaded,
+        left: this.left,
+        event
+      });
+
+      this.stats.announceCount++;
+      this.stats.lastAnnounceTime = new Date();
+
+      if (res.success) {
+        this.stats.seeders = res.complete;
+        this.stats.leechers = res.incomplete;
+        this.stats.lastResponseStatus = `OK (${res.complete} Seeders, ${res.incomplete} Leechers)`;
+        
+        // Interval update
+        const recommendedInterval = this.customInterval || res.minInterval || res.interval || 1800;
+        this.trackerInterval = recommendedInterval;
+        this.nextAnnounceCountdown = recommendedInterval;
+
+        this.emit('log', {
+          level: 'success',
+          message: `Tracker response: OK! Next announce in ${recommendedInterval}s (Seeders: ${res.complete}, Leechers: ${res.incomplete})`
+        });
+        if (res.warningMessage) {
+          this.emit('log', { level: 'warning', message: `Tracker warning: ${res.warningMessage}` });
+        }
+        return true;
+      } else {
+        this.stats.lastResponseStatus = `Failure: ${res.failureReason}`;
+        this.nextAnnounceCountdown = 120; // retry in 2 min on error
+        this.emit('log', { level: 'error', message: `Tracker error: ${res.failureReason}` });
+        return false;
+      }
+    } catch (err) {
+      this.stats.lastResponseStatus = `Error: ${err.message}`;
+      this.nextAnnounceCountdown = 60; // retry in 1 min on network error
+      this.emit('log', { level: 'error', message: `Network error announcing to tracker: ${err.message}` });
+      return false;
+    }
+  }
+
+  async stop() {
+    if (!this.isRunning || this.isStopping) return;
+    this.isStopping = true;
+    this.emit('log', { level: 'info', message: 'Stopping simulation and flushing final stats to tracker...' });
+
+    if (this.tickTimer) {
+      clearInterval(this.tickTimer);
+      this.tickTimer = null;
+    }
+
+    try {
+      await this.performAnnounce('stopped');
+    } catch (err) {
+      // ignore network errors on stop
+    }
+
+    this.isRunning = false;
+    this.isStopping = false;
+    this.emit('stopped', this.getSnapshot());
+  }
+
+  getSnapshot() {
+    const totalSize = this.torrentMeta.totalSize;
+    const currentRatio = this.downloaded > 0n 
+      ? Number(this.uploaded) / Number(this.downloaded) 
+      : (this.uploaded > 0n ? 999.99 : 0);
+
+    return {
+      torrentName: this.torrentMeta.name,
+      infoHashHex: this.torrentMeta.infoHashHex,
+      clientName: this.client.name,
+      mode: this.mode,
+      uploadedBytes: this.uploaded,
+      downloadedBytes: this.downloaded,
+      leftBytes: this.left,
+      totalSizeBytes: totalSize,
+      uploadSpeed: this.currentUploadSpeed,
+      downloadSpeed: this.currentDownloadSpeed,
+      ratio: currentRatio,
+      elapsedSeconds: this.elapsedSeconds,
+      nextAnnounceCountdown: this.nextAnnounceCountdown,
+      trackerInterval: this.trackerInterval,
+      seeders: this.stats.seeders,
+      leechers: this.stats.leechers,
+      lastResponseStatus: this.stats.lastResponseStatus,
+      lastAnnounceTime: this.stats.lastAnnounceTime,
+      announceCount: this.stats.announceCount
+    };
+  }
+}
