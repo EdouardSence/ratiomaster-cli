@@ -11,11 +11,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
-let currentSimulator = null;
-const sseClients = new Set();
+BigInt.prototype.toJSON = function() {
+  return this.toString();
+};
+
+function safeJsonStringify(data) {
+  return JSON.stringify(data, (key, value) =>
+    typeof value === 'bigint' ? value.toString() : value
+  );
+}
 
 function broadcastSSE(event, data) {
-  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  const payload = `event: ${event}\ndata: ${safeJsonStringify(data)}\n\n`;
   for (const clientRes of sseClients) {
     clientRes.write(payload);
   }
@@ -46,7 +53,7 @@ export function startWebServer(port = 3000) {
       sseClients.add(res);
 
       if (currentSimulator) {
-        res.write(`event: state\ndata: ${JSON.stringify(currentSimulator.getSnapshot())}\n\n`);
+        res.write(`event: state\ndata: ${safeJsonStringify(currentSimulator.getSnapshot())}\n\n`);
       }
 
       req.on('close', () => sseClients.delete(res));
@@ -159,7 +166,7 @@ export function startWebServer(port = 3000) {
     // Get Current State
     if (url.pathname === '/api/state' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify(currentSimulator ? currentSimulator.getSnapshot() : { isRunning: false }));
+      return res.end(safeJsonStringify(currentSimulator ? currentSimulator.getSnapshot() : { isRunning: false }));
     }
 
     // Static Files (public/)
