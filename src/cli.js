@@ -56,20 +56,24 @@ export async function runCLI(argv) {
     .name('ratiomaster')
     .description('CLI port of RatioMaster.NET - BitTorrent ratio spoofer & tracker announce simulator')
     .version('1.0.0')
-    .argument('[torrent]', 'Path to .torrent file')
+    .argument('[torrents...]', 'Path to one or multiple .torrent files')
     .option('-c, --client <name>', 'BitTorrent client profile to emulate', 'qBittorrent-4.6.3')
     .option('-u, --upload <speed>', 'Upload speed in KB/s (fixed e.g. "1000" or range "500-1500")', '500-1500')
     .option('-d, --download <speed>', 'Download speed in KB/s (fixed e.g. "50" or range "10-100")', '0')
     .option('-p, --port <number>', 'Custom peer port to report to tracker')
     .option('-r, --stop-ratio <ratio>', 'Stop simulation once target ratio is reached (e.g. 2.0)', parseFloat)
     .option('-s, --stop-uploaded <size>', 'Stop simulation once target upload size is reached (e.g. "5GB" or "500MB")')
+    .option('--stop-downloaded <size>', 'Stop simulation once target download size is reached (e.g. "2GB")')
     .option('-t, --stop-time <seconds>', 'Stop simulation after elapsed time in seconds', parseInt)
     .option('-i, --interval <seconds>', 'Override tracker announce interval in seconds', parseInt)
     .option('-m, --mode <seeding|leeching>', 'Initial mode: seeding (100% done) or leeching (0% done)', 'seeding')
     .option('-a, --announce-url <url>', 'Override announce URL from torrent file')
+    .option('--custom-peer-id <id>', 'Custom 20-character Peer-ID to report to tracker')
+    .option('--custom-user-agent <agent>', 'Custom HTTP User-Agent string')
+    .option('--scrape', 'Fetch tracker scrape statistics (seeders/leechers) before announcing')
     .option('--list-clients', 'List all supported client presets and exit')
     .option('--headless', 'Run without TUI full-screen interface (plain logging output)')
-    .action(async (torrentPath, options) => {
+    .action(async (torrentPaths, options) => {
       if (options.listClients) {
         console.log(chalk.bold.blue('\nSupported BitTorrent Client Presets:\n'));
         for (const [key, preset] of Object.entries(CLIENT_PRESETS)) {
@@ -79,13 +83,13 @@ export async function runCLI(argv) {
         process.exit(0);
       }
 
-      if (!torrentPath) {
-        console.error(chalk.red.bold('\nError: Missing required .torrent file path!'));
+      if (!torrentPaths || torrentPaths.length === 0) {
+        console.error(chalk.red.bold('\nError: Missing required .torrent file path(s)!'));
         console.log(chalk.gray('Run with --help for detailed usage instructions.\n'));
         process.exit(1);
       }
 
-      const resolvedPath = path.resolve(torrentPath);
+      const resolvedPath = path.resolve(torrentPaths[0]);
       if (!fs.existsSync(resolvedPath)) {
         console.error(chalk.red.bold(`\nError: File not found: "${resolvedPath}"\n`));
         process.exit(1);
@@ -105,10 +109,13 @@ export async function runCLI(argv) {
       const uploadRange = parseSpeedRange(options.upload, 500, 1500);
       const downloadRange = parseSpeedRange(options.download, 0, 0);
       const stopUploadedBytes = parseSize(options.stopUploaded);
+      const stopDownloadedBytes = parseSize(options.stopDownloaded);
 
       // Create client instance
       const client = new ClientInstance(options.client, {
-        port: options.port ? parseInt(options.port, 10) : undefined
+        port: options.port ? parseInt(options.port, 10) : undefined,
+        peerId: options.customPeerId,
+        userAgent: options.customUserAgent
       });
 
       // Create simulator instance
@@ -120,6 +127,7 @@ export async function runCLI(argv) {
         mode: options.mode,
         stopRatio: options.stopRatio,
         stopUploaded: stopUploadedBytes,
+        stopDownloaded: stopDownloadedBytes,
         stopTime: options.stopTime,
         customInterval: options.interval,
         announceUrl: options.announceUrl

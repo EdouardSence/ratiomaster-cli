@@ -30,6 +30,7 @@ export class SimulationEngine extends EventEmitter {
     // Stop conditions
     this.stopRatio = options.stopRatio || null;
     this.stopUploadedBytes = options.stopUploaded ? BigInt(options.stopUploaded) : null;
+    this.stopDownloadedBytes = options.stopDownloaded ? BigInt(options.stopDownloaded) : null;
     this.stopTimeSeconds = options.stopTime || null;
 
     // Custom interval override
@@ -129,6 +130,12 @@ export class SimulationEngine extends EventEmitter {
 
     if (this.stopUploadedBytes && this.uploaded >= this.stopUploadedBytes) {
       this.emit('log', { level: 'success', message: 'Target upload byte count reached!' });
+      this.stop();
+      return true;
+    }
+
+    if (this.stopDownloadedBytes && this.downloaded >= this.stopDownloadedBytes) {
+      this.emit('log', { level: 'success', message: 'Target download byte count reached!' });
       this.stop();
       return true;
     }
