@@ -10,6 +10,7 @@
   },
   "scripts": {
     "start": "node bin/ratiomaster.js",
+    "gui": "node bin/ratiomaster.js --gui",
     "test": "node test/test.js"
   },
   "keywords": [

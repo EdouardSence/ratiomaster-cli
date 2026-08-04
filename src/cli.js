@@ -71,9 +71,17 @@ export async function runCLI(argv) {
     .option('--custom-peer-id <id>', 'Custom 20-character Peer-ID to report to tracker')
     .option('--custom-user-agent <agent>', 'Custom HTTP User-Agent string')
     .option('--scrape', 'Fetch tracker scrape statistics (seeders/leechers) before announcing')
+    .option('--gui', 'Launch the Web GUI interface in browser')
+    .option('--gui-port <port>', 'Port for Web GUI server (default: 3000)', '3000')
     .option('--list-clients', 'List all supported client presets and exit')
     .option('--headless', 'Run without TUI full-screen interface (plain logging output)')
     .action(async (torrentPaths, options) => {
+      if (options.gui) {
+        const { startWebServer } = await import('./webserver.js');
+        const port = parseInt(options.guiPort || '3000', 10);
+        startWebServer(port);
+        return;
+      }
       if (options.listClients) {
         console.log(chalk.bold.blue('\nSupported BitTorrent Client Presets:\n'));
         for (const [key, preset] of Object.entries(CLIENT_PRESETS)) {

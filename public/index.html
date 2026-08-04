@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RatioMaster Web GUI</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-icon">⚡</div>
+        <div>
+          <h1>RatioMaster <span class="badge-tag">GUI</span></h1>
+          <p class="subtitle">BitTorrent Ratio Spoofer & Tracker Announce Simulator</p>
+        </div>
+      </div>
+      <div class="header-status">
+        <span id="statusBadge" class="status-pill status-idle">● En attente</span>
+      </div>
+    </header>
+
+    <!-- Main Content Layout -->
+    <main class="main-layout">
+      <!-- Left Config Section -->
+      <section class="config-panel">
+        <div class="tabs-header">
+          <button class="tab-btn active" data-tab="torrentTab">📁 Torrent</button>
+          <button class="tab-btn" data-tab="clientTab">🤖 Client</button>
+          <button class="tab-btn" data-tab="speedTab">⚡ Vitesses</button>
+          <button class="tab-btn" data-tab="limitsTab">🛑 Limites</button>
+        </div>
+
+        <!-- Tab 1: Torrent File -->
+        <div class="tab-content active" id="torrentTab">
+          <div class="drop-zone" id="dropZone">
+            <div class="drop-icon">📤</div>
+            <p class="drop-title">Glissez un fichier <strong>.torrent</strong> ici</p>
+            <p class="drop-sub">ou cliquez pour sélectionner sur votre disque</p>
+            <input type="file" id="torrentFileInput" accept=".torrent" style="display: none;">
+          </div>
+          <div class="form-group margin-top">
+            <label>Ou chemin absolu du fichier .torrent :</label>
+            <div class="input-with-button">
+              <input type="text" id="torrentFilePathInput" placeholder="/home/user/fichier.torrent">
+              <button id="btnParsePath" class="btn btn-secondary">Charger</button>
+            </div>
+          </div>
+          <div id="torrentMetaBox" class="meta-box hidden">
+            <h3>Fichier Torrent Chargé</h3>
+            <div class="meta-row"><span>Nom :</span> <strong id="metaName">-</strong></div>
+            <div class="meta-row"><span>Taille :</span> <strong id="metaSize">-</strong></div>
+            <div class="meta-row"><span>InfoHash :</span> <code id="metaHash">-</code></div>
+            <div class="meta-row"><span>Tracker :</span> <span id="metaAnnounce" class="truncate">-</span></div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Client Emulation -->
+        <div class="tab-content" id="clientTab">
+          <div class="form-group">
+            <label for="clientSelect">Profil Client BitTorrent à émulé :</label>
+            <select id="clientSelect" class="form-select">
+              <option value="qBittorrent-5.2.3" selected>qBittorrent 5.2.3 (Recommandé)</option>
+              <option value="qBittorrent-5.0.0">qBittorrent 5.0.0</option>
+              <option value="qBittorrent-4.6.3">qBittorrent 4.6.3</option>
+              <option value="Transmission-4.0.5">Transmission 4.0.5</option>
+              <option value="Transmission-3.00">Transmission 3.00</option>
+              <option value="uTorrent-3.5.5">uTorrent 3.5.5</option>
+              <option value="Deluge-2.1.1">Deluge 2.1.1</option>
+              <option value="BiglyBT-3.4.0">BiglyBT 3.4.0</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group col">
+              <label for="portInput">Port Peer (écoutes) :</label>
+              <input type="number" id="portInput" value="6881" min="1025" max="65535">
+            </div>
+            <div class="form-group col">
+              <label for="modeSelect">Mode Initial :</label>
+              <select id="modeSelect" class="form-select">
+                <option value="seeding" selected>Seeding (100% fait)</option>
+                <option value="leeching">Leeching (Progression simulée)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="customPeerIdInput">Peer-ID Personnalisé (optionnel) :</label>
+            <input type="text" id="customPeerIdInput" placeholder="-qB5230-xxxxxxxxxxxx">
+          </div>
+          <div class="form-group">
+            <label for="customUserAgentInput">User-Agent Personnalisé (optionnel) :</label>
+            <input type="text" id="customUserAgentInput" placeholder="qBittorrent/5.2.3">
+          </div>
+        </div>
+
+        <!-- Tab 3: Speed Settings -->
+        <div class="tab-content" id="speedTab">
+          <div class="form-group">
+            <label>Plage de vitesse d'Upload (Ko/s ou Mo/s) :</label>
+            <div class="form-row">
+              <div class="form-group col">
+                <label class="sub-label">Min :</label>
+                <input type="number" id="minUploadInput" value="80000" placeholder="ex: 80000 (80Mo/s)">
+              </div>
+              <div class="form-group col">
+                <label class="sub-label">Max :</label>
+                <input type="number" id="maxUploadInput" value="100000" placeholder="ex: 100000 (100Mo/s)">
+              </div>
+            </div>
+            <p class="help-text">💡 Ex: Min 80000, Max 100000 = ~90 Mo/s avec variation aléatoire.</p>
+          </div>
+          <div class="form-group">
+            <label>Plage de vitesse de Download (Ko/s) :</label>
+            <div class="form-row">
+              <div class="form-group col">
+                <label class="sub-label">Min :</label>
+                <input type="number" id="minDownloadInput" value="0">
+              </div>
+              <div class="form-group col">
+                <label class="sub-label">Max :</label>
+                <input type="number" id="maxDownloadInput" value="0">
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="intervalInput">Outrepasser l'intervalle Tracker (secondes) :</label>
+            <input type="number" id="intervalInput" placeholder="ex: 1800 (laisser vide pour automatique)">
+          </div>
+        </div>
+
+        <!-- Tab 4: Stop Conditions -->
+        <div class="tab-content" id="limitsTab">
+          <div class="form-group">
+            <label for="stopRatioInput">Ratio Cible (Arrêt auto) :</label>
+            <input type="number" step="0.1" id="stopRatioInput" value="2.0" placeholder="ex: 2.0">
+          </div>
+          <div class="form-group">
+            <label for="stopUploadedInput">Taille Upload Max (ex: 5GB, 500MB) :</label>
+            <input type="text" id="stopUploadedInput" placeholder="ex: 5GB">
+          </div>
+          <div class="form-group">
+            <label for="stopDownloadedInput">Taille Download Max :</label>
+            <input type="text" id="stopDownloadedInput" placeholder="ex: 2GB">
+          </div>
+          <div class="form-group">
+            <label for="stopTimeInput">Durée Max Simulation (secondes) :</label>
+            <input type="number" id="stopTimeInput" placeholder="ex: 3600">
+          </div>
+        </div>
+
+        <!-- Action Control Buttons -->
+        <div class="action-buttons">
+          <button id="btnStart" class="btn btn-primary">▶ Démarrer la Simulation</button>
+          <button id="btnStop" class="btn btn-danger" disabled>⏹ Arrêter & Signaler au Tracker</button>
+        </div>
+      </section>
+
+      <!-- Right Dashboard Monitor Section -->
+      <section class="monitor-panel">
+        <div class="panel-header">
+          <h2>📊 Tableau de Bord Temps Réel</h2>
+        </div>
+
+        <div class="gauges-grid">
+          <div class="stat-card card-upload">
+            <span class="card-label">Vitesse Upload</span>
+            <span id="statUploadSpeed" class="card-val green">0.00 MB/s</span>
+            <span id="statUploadedTotal" class="card-sub">Total: 0 B</span>
+          </div>
+
+          <div class="stat-card card-download">
+            <span class="card-label">Vitesse Download</span>
+            <span id="statDownloadSpeed" class="card-val blue">0.00 MB/s</span>
+            <span id="statDownloadedTotal" class="card-sub">Total: 0 B</span>
+          </div>
+
+          <div class="stat-card card-ratio">
+            <span class="card-label">Ratio Simulée</span>
+            <span id="statRatio" class="card-val yellow">0.00</span>
+            <span id="statMode" class="card-sub">Mode: SEEDING</span>
+          </div>
+
+          <div class="stat-card card-peers">
+            <span class="card-label">Peers Tracker</span>
+            <span id="statPeers" class="card-val white">0 / 0</span>
+            <span id="statPeersSub" class="card-sub">Seeders / Leechers</span>
+          </div>
+        </div>
+
+        <!-- Progress and Tracker Status -->
+        <div class="tracker-box">
+          <div class="tracker-row">
+            <span>Prochaine Annonce :</span>
+            <span id="statCountdown">--:--</span>
+          </div>
+          <div class="progress-bar-container">
+            <div id="progressFill" class="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+          <div class="tracker-row margin-top-sm">
+            <span>Dernière Réponse :</span>
+            <span id="statLastStatus" class="status-msg">En attente...</span>
+          </div>
+        </div>
+
+        <!-- Activity Log Console -->
+        <div class="console-box">
+          <div class="console-header">
+            <span>Journal d'Activité en Direct</span>
+            <button id="btnClearLogs" class="btn-sm">Effacer</button>
+          </div>
+          <div id="logConsole" class="log-console">
+            <div class="log-line info">[SYS] RatioMaster Web GUI prêt. Sélectionnez un torrent et cliquez sur Démarrer.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
