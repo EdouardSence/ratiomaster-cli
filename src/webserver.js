@@ -1,4 +1,5 @@
 import http from 'http';
+import { parseSize } from './cli.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -122,8 +123,8 @@ export function startWebServer(port = 3000) {
             maxDownloadRate: body.maxDownloadRate || 0,
             mode: body.mode || 'seeding',
             stopRatio: body.stopRatio ? parseFloat(body.stopRatio) : null,
-            stopUploaded: body.stopUploaded ? BigInt(body.stopUploaded) : null,
-            stopDownloaded: body.stopDownloaded ? BigInt(body.stopDownloaded) : null,
+            stopUploaded: parseSize(body.stopUploaded),
+            stopDownloaded: parseSize(body.stopDownloaded),
             stopTime: body.stopTime ? parseInt(body.stopTime, 10) : null,
             customInterval: body.customInterval ? parseInt(body.customInterval, 10) : null,
             announceUrl: body.announceUrl

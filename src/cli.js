@@ -32,12 +32,13 @@ function parseSpeedRange(input, defaultMin = 500, defaultMax = 1500) {
   return { min: isNaN(val) ? defaultMin : val, max: isNaN(val) ? defaultMax : val };
 }
 
-function parseSize(input) {
+export function parseSize(input) {
   if (!input) return null;
-  const match = input.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?$/);
+  if (typeof input === 'number' || typeof input === 'bigint') return BigInt(input);
+  const match = String(input).trim().match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?$/);
   if (!match) return null;
   const val = parseFloat(match[1]);
-  const unit = (match[2] || 'MB').toUpperCase();
+  const unit = (match[2] || 'MB').toUpperCase().replace('O', 'B'); // Go -> GB, Mo -> MB, Ko -> KB
   const units = {
     'B': 1,
     'KB': 1024,
@@ -46,7 +47,7 @@ function parseSize(input) {
     'TB': 1024 * 1024 * 1024 * 1024
   };
   const multiplier = units[unit] || units['MB'];
-  return Math.round(val * multiplier);
+  return BigInt(Math.round(val * multiplier));
 }
 
 export async function runCLI(argv) {
