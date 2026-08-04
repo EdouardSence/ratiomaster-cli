@@ -11,6 +11,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
+let currentSimulator = null;
+const sseClients = new Set();
+
 BigInt.prototype.toJSON = function() {
   return this.toString();
 };
