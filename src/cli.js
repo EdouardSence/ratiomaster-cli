@@ -72,6 +72,8 @@ export async function runCLI(argv) {
     .option('--custom-peer-id <id>', 'Custom 20-character Peer-ID to report to tracker')
     .option('--custom-user-agent <agent>', 'Custom HTTP User-Agent string')
     .option('--scrape', 'Fetch tracker scrape statistics (seeders/leechers) before announcing')
+    .option('--no-zero-leech', 'Disable zero-leecher safety protection (continue uploading even when 0 leechers in swarm)')
+    .option('--zero-leech-action <action>', 'Action when 0 leechers are detected: "pause" or "stop"', 'pause')
     .option('--gui', 'Launch the Web GUI interface in browser')
     .option('--gui-port <port>', 'Port for Web GUI server (default: 3000)', '3000')
     .option('--list-clients', 'List all supported client presets and exit')
@@ -139,7 +141,10 @@ export async function runCLI(argv) {
         stopDownloaded: stopDownloadedBytes,
         stopTime: options.stopTime,
         customInterval: options.interval,
-        announceUrl: options.announceUrl
+        announceUrl: options.announceUrl,
+        zeroLeechProtection: options.zeroLeech !== false,
+        zeroLeechAction: options.zeroLeechAction || 'pause',
+        scrape: options.scrape
       });
 
       const isHeadless = options.headless || !process.stdout.isTTY;

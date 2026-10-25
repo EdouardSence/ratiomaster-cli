@@ -137,7 +137,10 @@ export function startWebServer(port = 3000) {
             stopDownloaded: parseSize(body.stopDownloaded),
             stopTime: body.stopTime ? parseInt(body.stopTime, 10) : null,
             customInterval: body.customInterval ? parseInt(body.customInterval, 10) : null,
-            announceUrl: body.announceUrl
+            announceUrl: body.announceUrl,
+            zeroLeechProtection: body.zeroLeechProtection !== undefined ? Boolean(body.zeroLeechProtection) : true,
+            zeroLeechAction: body.zeroLeechAction || 'pause',
+            scrape: Boolean(body.scrape)
           });
 
           currentSimulator.on('log', (logItem) => broadcastSSE('log', logItem));

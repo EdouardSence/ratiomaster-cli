@@ -198,13 +198,18 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function updateDashboard(s) {
-    statUploadSpeed.textContent = formatSpeed(s.uploadSpeed);
+    if (s.isZeroLeechPaused) {
+      statUploadSpeed.textContent = '0 B/s (PAUSED: 0 Leechers)';
+      statMode.textContent = `Mode: ${s.mode.toUpperCase()} (PAUSED: 0 Leechers)`;
+    } else {
+      statUploadSpeed.textContent = formatSpeed(s.uploadSpeed);
+      statMode.textContent = 'Mode: ' + s.mode.toUpperCase();
+    }
     statUploadedTotal.textContent = 'Total: ' + formatBytes(s.uploadedBytes);
     statDownloadSpeed.textContent = formatSpeed(s.downloadSpeed);
     statDownloadedTotal.textContent = 'Total: ' + formatBytes(s.downloadedBytes);
 
     statRatio.textContent = s.ratio.toFixed(2);
-    statMode.textContent = 'Mode: ' + s.mode.toUpperCase();
     statPeers.textContent = `${s.seeders} / ${s.leechers}`;
     statLastStatus.textContent = s.lastResponseStatus;
 

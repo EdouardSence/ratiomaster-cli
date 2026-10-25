@@ -74,4 +74,45 @@ console.log('Running extended test suite for ratiomaster-cli...\n');
   console.log('✓ Simulation engine unit test passed.');
 }
 
+// 4. Test Zero-Leecher Protection
+{
+  const dummyMeta = {
+    name: 'Sample Torrent',
+    infoHashHex: '0123456789abcdef0123456789abcdef01234567',
+    infoHashUrlEncoded: '%01%23%45%67%89%AB%CD%EF%01%23%45%67%89%AB%CD%EF%01%23%45%67',
+    announce: 'http://tracker.example.com/announce',
+    totalSize: 10000000
+  };
+
+  const client = new ClientInstance('qBittorrent-5.3.0');
+  const engine = new SimulationEngine(dummyMeta, client, {
+    minUploadRate: 1000,
+    maxUploadRate: 1000,
+    zeroLeechProtection: true,
+    zeroLeechAction: 'pause'
+  });
+
+  // Simulate tick with normal leechers
+  engine.isRunning = true;
+  engine.onTick();
+  assert.strictEqual(engine.currentUploadSpeed > 0, true);
+  assert.strictEqual(engine.uploaded > 0n, true);
+
+  const prevUploaded = engine.uploaded;
+
+  // Trigger zero leechers pause
+  engine.isZeroLeechPaused = true;
+  engine.onTick();
+  assert.strictEqual(engine.currentUploadSpeed, 0);
+  assert.strictEqual(engine.uploaded, prevUploaded); // Upload must NOT increment while paused
+
+  // Resume when leechers appear
+  engine.isZeroLeechPaused = false;
+  engine.onTick();
+  assert.strictEqual(engine.currentUploadSpeed > 0, true);
+  assert.strictEqual(engine.uploaded > prevUploaded, true);
+
+  console.log('✓ Zero-leecher anti-ban protection test passed.');
+}
+
 console.log('\nAll extended tests passed successfully! 🎉');

@@ -29,6 +29,7 @@ Simulates upload and download traffic to BitTorrent HTTP/HTTPS trackers without 
   - On total downloaded volume (e.g., `--stop-downloaded 2GB`).
   - On elapsed duration (e.g., `--stop-time 3600`).
 - 🔄 **Graceful Shutdown**: Automatically sends `event=stopped` to the tracker on exit (`Ctrl+C` or limit reached) so all transferred data is recorded.
+- 🛡️ **Smart Anti-Ban (Zero-Leecher Protection)**: Automatically pauses upload simulation to 0 B/s (or stops simulation) when 0 leechers are detected in the swarm, preventing impossible upload reports on strict private trackers. Automatically resumes when leechers join.
 - 🤖 **Headless Mode**: `--headless` flag for headless servers, Docker containers, cron jobs, and background scripts.
 
 ---
@@ -111,6 +112,8 @@ Options:
   --custom-peer-id <id>          Custom 20-character Peer-ID to report to tracker
   --custom-user-agent <agent>    Custom HTTP User-Agent string
   --scrape                       Fetch tracker scrape statistics before announcing
+  --no-zero-leech                Disable zero-leecher safety protection
+  --zero-leech-action <action>   Action when 0 leechers are detected: "pause" (default) or "stop"
   --gui                          Launch the Web GUI interface in browser
   --gui-port <port>              Port for Web GUI server (default: 3000)
   --list-clients                 List all supported client presets and exit
@@ -142,6 +145,7 @@ Permet de simuler la vitesse d'upload et de download auprès des trackers BitTor
   - Sur volume de download total (ex: `--stop-downloaded 2GB`).
   - Sur durée écoulée (ex: `--stop-time 3600`).
 - 🔄 **Arrêt propre & Graceful Shutdown** : Envoi automatique de l'événement `stopped` au tracker lors de la fermeture (Ctrl+C ou objectif atteint) afin que toutes les données soient enregistrées par le tracker.
+- 🛡️ **Protection Anti-Ban Intelligente (Zéro Leecher)** : Met automatiquement la vitesse d'upload simulée à 0 B/s (ou stoppe la simulation) si le swarm n'a aucun leecher, évitant de se faire repérer par les anti-triches de trackers privés. Reprend automatiquement dès qu'un leecher arrive.
 - 🤖 **Mode Headless / Automation** : Option `--headless` pour l'intégration dans des scripts Bash, conteneurs Docker ou tâches Cron.
 
 ---

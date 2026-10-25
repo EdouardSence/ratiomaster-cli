@@ -1,5 +1,5 @@
 import EventEmitter from 'events';
-import { sendAnnounce } from './announce.js';
+import { sendAnnounce, sendScrape } from './announce.js';
 
 export class SimulationEngine extends EventEmitter {
   constructor(torrentMeta, client, options = {}) {
@@ -36,6 +36,12 @@ export class SimulationEngine extends EventEmitter {
     // Custom interval override
     this.customInterval = options.customInterval || null;
 
+    // Anti-ban: Zero-Leecher Protection
+    this.zeroLeechProtection = options.zeroLeechProtection !== false; // enabled by default
+    this.zeroLeechAction = options.zeroLeechAction || 'pause'; // 'pause' | 'stop'
+    this.isZeroLeechPaused = false;
+    this.enableScrape = Boolean(options.scrape);
+
     // Internal State
     this.isRunning = false;
     this.isStopping = false;
@@ -63,6 +69,48 @@ export class SimulationEngine extends EventEmitter {
     this.emit('log', { level: 'info', message: `Starting simulation for "${this.torrentMeta.name}"` });
     this.emit('log', { level: 'info', message: `Emulating client: ${this.client.name} (PeerID: ${this.client.peerId})` });
 
+    if (this.zeroLeechProtection) {
+      this.emit('log', { level: 'info', message: `Zero-leecher protection: active (action: ${this.zeroLeechAction})` });
+    }
+
+    // Optional Scrape before initial announce
+    if (this.enableScrape) {
+      this.emit('log', { level: 'info', message: 'Fetching tracker scrape statistics...' });
+      try {
+        const scrapeRes = await sendScrape({
+          announceUrl: this.activeAnnounceUrl,
+          torrentMeta: this.torrentMeta
+        });
+        if (scrapeRes) {
+          this.stats.seeders = scrapeRes.complete;
+          this.stats.leechers = scrapeRes.incomplete;
+          this.emit('log', {
+            level: 'info',
+            message: `Scrape result: ${scrapeRes.complete} Seeders, ${scrapeRes.incomplete} Leechers`
+          });
+          if (this.zeroLeechProtection && scrapeRes.incomplete === 0) {
+            if (this.zeroLeechAction === 'stop') {
+              this.emit('log', {
+                level: 'warning',
+                message: '🛑 0 leechers detected in scrape. Aborting simulation before announce (anti-ban protection).'
+              });
+              this.isRunning = false;
+              this.emit('stopped', this.getSnapshot());
+              return;
+            } else {
+              this.isZeroLeechPaused = true;
+              this.emit('log', {
+                level: 'warning',
+                message: '⚠️ 0 leechers detected in scrape. Upload initialized in paused state.'
+              });
+            }
+          }
+        }
+      } catch (err) {
+        this.emit('log', { level: 'warning', message: `Scrape failed: ${err.message}. Proceeding with announce.` });
+      }
+    }
+
     // Initial announce with event=started
     const success = await this.performAnnounce('started');
     if (!success && !this.isRunning) {
@@ -78,12 +126,16 @@ export class SimulationEngine extends EventEmitter {
 
     this.elapsedSeconds++;
 
-    // Calculate current random speed (with subtle variation tick-to-tick)
-    this.currentUploadSpeed = this.getRandomSpeed(this.minUploadSpeed, this.maxUploadSpeed);
-    this.currentDownloadSpeed = this.getRandomSpeed(this.minDownloadSpeed, this.maxDownloadSpeed);
+    // Calculate current random speed (with zero-leecher pause check)
+    if (this.zeroLeechProtection && this.isZeroLeechPaused) {
+      this.currentUploadSpeed = 0;
+    } else {
+      this.currentUploadSpeed = this.getRandomSpeed(this.minUploadSpeed, this.maxUploadSpeed);
+      // Add transfer bytes for this second
+      this.uploaded += BigInt(Math.round(this.currentUploadSpeed));
+    }
 
-    // Add transfer bytes for this second
-    this.uploaded += BigInt(Math.round(this.currentUploadSpeed));
+    this.currentDownloadSpeed = this.getRandomSpeed(this.minDownloadSpeed, this.maxDownloadSpeed);
 
     if (this.mode === 'leeching' && this.left > 0n) {
       const downloadedThisTick = BigInt(Math.round(this.currentDownloadSpeed));
@@ -182,6 +234,36 @@ export class SimulationEngine extends EventEmitter {
         if (res.warningMessage) {
           this.emit('log', { level: 'warning', message: `Tracker warning: ${res.warningMessage}` });
         }
+
+        // Anti-ban: Zero-leecher check
+        if (this.zeroLeechProtection) {
+          if (res.incomplete === 0) {
+            if (this.zeroLeechAction === 'stop') {
+              this.emit('log', {
+                level: 'warning',
+                message: '🛑 0 leechers in swarm! Stopping simulation immediately (anti-ban protection).'
+              });
+              await this.stop();
+              return true;
+            } else {
+              if (!this.isZeroLeechPaused) {
+                this.isZeroLeechPaused = true;
+                this.currentUploadSpeed = 0;
+                this.emit('log', {
+                  level: 'warning',
+                  message: '⚠️ 0 leechers detected in swarm! Upload paused automatically to prevent ban. Periodic announces continue.'
+                });
+              }
+            }
+          } else if (this.isZeroLeechPaused && res.incomplete > 0) {
+            this.isZeroLeechPaused = false;
+            this.emit('log', {
+              level: 'success',
+              message: `🎉 Leechers detected (${res.incomplete})! Resuming simulated upload.`
+            });
+          }
+        }
+
         return true;
       } else {
         this.stats.lastResponseStatus = `Failure: ${res.failureReason}`;
@@ -241,6 +323,9 @@ export class SimulationEngine extends EventEmitter {
       trackerInterval: this.trackerInterval,
       seeders: this.stats.seeders,
       leechers: this.stats.leechers,
+      isZeroLeechPaused: this.isZeroLeechPaused,
+      zeroLeechProtection: this.zeroLeechProtection,
+      zeroLeechAction: this.zeroLeechAction,
       lastResponseStatus: this.stats.lastResponseStatus,
       lastAnnounceTime: this.stats.lastAnnounceTime,
       announceCount: this.stats.announceCount

@@ -65,7 +65,9 @@ export class DashboardUI {
 
     // Stats Grid
     const uploadedStr = chalk.green.bold(formatBytes(snapshot.uploadedBytes));
-    const uploadSpeedStr = chalk.green(formatSpeed(snapshot.uploadSpeed));
+    const uploadSpeedStr = snapshot.isZeroLeechPaused
+      ? chalk.yellow.bold('0 B/s (PAUSED: 0 Leechers)')
+      : chalk.green(formatSpeed(snapshot.uploadSpeed));
     const downloadedStr = chalk.cyan(formatBytes(snapshot.downloadedBytes));
     const downloadSpeedStr = chalk.cyan(formatSpeed(snapshot.downloadSpeed));
     
@@ -75,11 +77,14 @@ export class DashboardUI {
     else ratioColor = chalk.red.bold;
 
     const ratioStr = ratioColor(snapshot.ratio.toFixed(3));
+    const modeStr = snapshot.isZeroLeechPaused
+      ? `${chalk.yellow(snapshot.mode.toUpperCase())} ${chalk.bgYellow.black.bold(' [PAUSED: 0 LEECHERS] ')}`
+      : chalk.yellow(snapshot.mode.toUpperCase());
 
     console.log(` ${chalk.bold('TRANSFER STATISTICS')}`);
     console.log(`  Uploaded   : ${uploadedStr} (${uploadSpeedStr})`);
     console.log(`  Downloaded : ${downloadedStr} (${downloadSpeedStr})`);
-    console.log(`  Ratio      : ${ratioStr} | Mode: ${chalk.yellow(snapshot.mode.toUpperCase())}`);
+    console.log(`  Ratio      : ${ratioStr} | Mode: ${modeStr}`);
     console.log(`  Elapsed    : ${chalk.white(formatDuration(snapshot.elapsedSeconds))}`);
     console.log(borderLine);
 
