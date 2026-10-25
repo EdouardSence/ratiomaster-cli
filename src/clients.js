@@ -29,6 +29,15 @@ function randomHex(length) {
  */
 export const CLIENT_PRESETS = {
   // Modern Presets
+  'qBittorrent-5.3.0': {
+    name: 'qBittorrent 5.3.0',
+    userAgent: 'qBittorrent/5.3.0',
+    peerIdPrefix: '-qB5300-',
+    peerIdType: 'alphanumeric',
+    keyType: 'hex',
+    defPort: 6881,
+    queryPattern: 'info_hash={infohash}&peer_id={peerid}&port={port}&uploaded={uploaded}&downloaded={downloaded}&left={left}&corrupt=0&key={key}&event={event}&numwant={numwant}&compact=1&no_peer_id=1'
+  },
   'qBittorrent-5.2.3': {
     name: 'qBittorrent 5.2.3',
     userAgent: 'qBittorrent/5.2.3',
